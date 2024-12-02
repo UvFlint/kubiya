@@ -174,18 +174,19 @@ def get_weather_data(city, month):
     min_temp_avg = round(statistics.mean(min_temps_month), 2)
     max_temp_avg = round(statistics.mean(max_temps_month), 2)
 
-    insert_weather(city,min_temp_avg,max_temp_avg)
+    insert_weather(city,month,min_temp_avg,max_temp_avg)
     logging.debug(
         f"Weather data for {city}, month {month}: "
         f"min_avg={min_temp_avg}, max_avg={max_temp_avg}"
     )
     return min_temp_avg, max_temp_avg
 
-def insert_weather(city, min_temp_avg, max_temp_avg):
+def insert_weather(city,month, min_temp_avg, max_temp_avg):
     try:
         cache_collection.insert_one({
         "cache_type": "weather",
         "city": city,
+        "month": month,
         "min_temp_avg": min_temp_avg,
         "max_temp_avg": max_temp_avg
         })
