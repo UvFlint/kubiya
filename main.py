@@ -30,7 +30,7 @@ logging.basicConfig(
 
 # MongoDB Setup
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
-DB_NAME = os.getenv('DB_NAME', 'kubiaWeathreApp')
+DB_NAME = os.getenv('DB_NAME', 'kubiya')
 METRICS_COLLECTION = os.getenv('METRICS_COLLECTION', 'metrics')
 
 try:
@@ -282,22 +282,35 @@ def compare_cities():
 def get_metrics():
     response = {"routes": {}}
     try:
-        for doc in metrics_collection.find():
-            route = doc['_id']
-            hits = doc.get('hits', 0)
-            errors = doc.get('errors', 0)
-            total_time = doc.get('total_time', 0.0)
-            min_time = doc.get('min_time', 0.0)
-            max_time = doc.get('max_time', 0.0)
-            avg_time = round(total_time / hits, 4) if hits > 0 else 0.0
-            response["routes"][route] = {
-                "route_name": doc.get('route_name', route),
-                "hits": hits,
-                "errors": errors,
-                "avg_time": avg_time,
-                "max_time": round(max_time, 4),
-                "min_time": round(min_time, 4),
-            }
+        # Fetch all documents
+        docs = metrics_collection.find()
+        
+        for doc in docs:
+            for route, data in doc.items():
+                if route == "_id":  # Skip MongoDB's object ID
+                    continue
+                
+                # Extract route data
+                hits = data.get("hits", 0)
+                errors = data.get("errors", 0)
+                times = data.get("times", [])
+                
+                # Aggregate times
+                total_time = sum(times)
+                min_time = min(times) if times else 0.0
+                max_time = max(times) if times else 0.0
+                avg_time = round(total_time / hits, 4) if hits > 0 else 0.0
+                
+                # Prepare response
+                response["routes"][route] = {
+                    "route_name": data.get("route_name", route),
+                    "hits": hits,
+                    "errors": errors,
+                    "avg_time": avg_time,
+                    "max_time": round(max_time, 4),
+                    "min_time": round(min_time, 4),
+                }
+        
         logging.info("Metrics retrieved successfully.")
         return jsonify(response)
     except Exception as e:
