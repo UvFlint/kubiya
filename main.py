@@ -33,7 +33,13 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 DB_NAME = os.getenv('DB_NAME', 'kubiaWeathreApp')
 METRICS_COLLECTION = os.getenv('METRICS_COLLECTION', 'metrics')
 
-client = MongoClient(MONGO_URI)
+try:
+    client = MongoClient(MONGO_URI)
+    logging.info(f"Connected to mongo - success")
+except Exception as e:
+    logging.info(f"Connected to mongo - fail - {str(e)}")
+    quit()
+
 db = client[DB_NAME]
 metrics_collection = db[METRICS_COLLECTION]
 metrics_objectID = ObjectId("674d77e62034f74473b1e65f")
