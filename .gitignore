@@ -162,3 +162,6 @@ media/
 # Temporary files
 *.swp
 *~
+
+# pem
+*.pem

@@ -7,16 +7,14 @@ import time
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 
-# Ensure the logs directory exists
+
 if not os.path.exists('logs'):
     os.makedirs('logs')
 
-# Get logging level from environment variable or default to INFO
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 
 # Configure logging
