@@ -1,5 +1,6 @@
 import os
 import logging
+from bson import ObjectId
 from flask import Flask, request, jsonify
 import requests
 import statistics
@@ -35,7 +36,7 @@ METRICS_COLLECTION = os.getenv('METRICS_COLLECTION', 'metrics')
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 metrics_collection = db[METRICS_COLLECTION]
-
+metrics_objectID = ObjectId("674d77e62034f74473b1e65f")
 # In-memory cache
 weather_cache = {}
 geocode_cache = {}
@@ -46,21 +47,21 @@ END_DATE = "2023-12-31"
 
 def track_metrics(route, elapsed_time, error_occurred):
     try:
-        # Update metrics in MongoDB
-        metrics_collection.update_one(
-            {'_id': route},
-            {
-                '$inc': {
-                    'hits': 1,
-                    'errors': int(error_occurred),
-                    'total_time': elapsed_time
-                },
-                '$min': {'min_time': elapsed_time},
-                '$max': {'max_time': elapsed_time},
-                '$setOnInsert': {'route_name': route}
+        # Build the filter and update query
+        filter_query = {"_id": metrics_objectID}  # Use your actual document ID
+        update_query = {
+            "$inc": {
+                f"{route}.hits": 1,
+                f"{route}.errors": int(error_occurred),
             },
-            upsert=True
-        )
+            "$min": {f"{route}.min_time": elapsed_time},
+            "$max": {f"{route}.max_time": elapsed_time},
+            "$push": {f"{route}.times": elapsed_time},  # Store individual response times
+            "$setOnInsert": {f"{route}.route_name": route}
+        }
+
+        # Update the document
+        metrics_collection.update_one(filter_query, update_query, upsert=True)
         logging.info(f"Route {route} processed in {elapsed_time:.4f} seconds")
     except Exception as e:
         logging.exception(f"Failed to track metrics for route {route}: {e}")
@@ -73,7 +74,7 @@ def get_lat_lon(city):
 
     logging.info(f"Fetching geocode data for city: {city}")
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}"
-    response = requests.get(url)
+    response = requests.get(url, verify=False)
     if response.status_code != 200:
         logging.error(f"Failed to fetch geocode data for city: {city}")
         raise ValueError("Geocoding API request failed.")
@@ -104,7 +105,7 @@ def get_weather_data(city, month):
         f"&start_date={START_DATE}&end_date={END_DATE}"
         f"&daily=temperature_2m_min,temperature_2m_max&timezone=UTC"
     )
-    response = requests.get(url)
+    response = requests.get(url, verify=False)
     if response.status_code != 200:
         logging.error(f"Failed to fetch weather data for city: {city}")
         raise ValueError("Weather API request failed.")
