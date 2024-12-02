@@ -91,7 +91,7 @@ def get_lat_lon(city):
     cache_temp = check_cache("geocode",city)
     if cache_temp:
         logging.debug(f"Geocode cache hit for city: {city}")
-        return (cache_temp["lat"], cache_temp["lan"])
+        return (cache_temp["lat"], cache_temp["lon"])
 
     logging.info(f"Fetching geocode data for city: {city}")
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}"
