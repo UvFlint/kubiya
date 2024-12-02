@@ -35,7 +35,6 @@ logging.basicConfig(
 # MongoDB Setup
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 DB_NAME = os.getenv('DB_NAME', 'kubiya')
-METRICS_COLLECTION = os.getenv('METRICS_COLLECTION', 'metrics')
 
 try:
     client = MongoClient(MONGO_URI)
@@ -45,16 +44,24 @@ except Exception as e:
     quit()
 
 db = client[DB_NAME]
-metrics_collection = db[METRICS_COLLECTION]
+metrics_collection = db["metrics"]
 metrics_objectID = ObjectId("674d77e62034f74473b1e65f")
-
-# In-memory cache
-weather_cache = {}
-geocode_cache = {}
+cache_collection = db["cache"]
 
 START_DATE = "2018-01-01"
 END_DATE = "2023-12-31"
 
+def check_cache(cache_type,city,month=None):
+    try:
+        filter_query = {"cache_type": cache_type, "city": city}
+        if month is not None:
+            filter_query["month"] = month
+        result = cache_collection.find_one(filter_query)
+        if not result:
+            return False
+        return result
+    except Exception as e:
+        logging.exception(f"Couldn't get cache from mongodb - {str(e)}")
 
 def track_metrics(route, elapsed_time, error_occurred):
     try:
@@ -81,13 +88,14 @@ def track_metrics(route, elapsed_time, error_occurred):
 
 
 def get_lat_lon(city):
-    if city in geocode_cache:
+    cache_temp = check_cache("geocode_cache",city)
+    if cache_temp:
         logging.debug(f"Geocode cache hit for city: {city}")
-        return geocode_cache[city]
+        return (cache_temp["lat"], cache_temp["lan"])
 
     logging.info(f"Fetching geocode data for city: {city}")
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}"
-    response = requests.get(url)
+    response = requests.get(url,verify=False)
 
     if response.status_code != 200:
         logging.error(f"Failed to fetch geocode data for city: {city}")
@@ -96,21 +104,33 @@ def get_lat_lon(city):
     data = response.json()
 
     if not data.get("results"):
-        logging.error(f"City '{city}' not found in geocoding API.")
+        logging.error(f"City '{city}' not found in open-meteo geocoding API.")
         raise WeatherAppException(f"City '{city}' not found.")
 
     lat = data["results"][0]["latitude"]
     lon = data["results"][0]["longitude"]
-    geocode_cache[city] = (lat, lon)
+    insert_geocode(city,lat,lon)
     logging.debug(f"Geocode data for city '{city}': lat={lat}, lon={lon}")
     return lat, lon
 
 
+def insert_geocode(city,lat,lon):
+    try:
+        cache_collection.insert_one({
+        "cache_type": "geocode",
+        "city": city,
+        "lat": lat,
+        "lon": lon
+        })
+    except Exception as e:
+        logging.exception(f"Error occured while inserting city geocode - {str(e)}")
+
+
 def get_weather_data(city, month):
-    cache_key = f"{city}_{month}"
-    if cache_key in weather_cache:
-        logging.debug(f"Weather cache hit for key: {cache_key}")
-        return weather_cache[cache_key]
+    weather_cache_temp = check_cache("weather_cache",city, month)
+    if weather_cache_temp:
+        logging.debug(f"Weather cache hit for city and month: {city}-{month}")
+        return (weather_cache_temp["min_temp_avg"], weather_cache_temp["max_temp_avg"])
 
     lat, lon = get_lat_lon(city)
     logging.info(f"Fetching weather data for city: {city}, month: {month}")
@@ -119,9 +139,9 @@ def get_weather_data(city, month):
         f"https://archive-api.open-meteo.com/v1/archive"
         f"?latitude={lat}&longitude={lon}"
         f"&start_date={START_DATE}&end_date={END_DATE}"
-        # f"&daily=temperature_2m_min,temperature_2m_max&timezone=UTC"
+        f"&daily=temperature_2m_min,temperature_2m_max&timezone=UTC"
     )
-    response = requests.get(url)
+    response = requests.get(url,verify=False)
 
     if response.status_code != 200:
         logging.error(f"Failed to fetch weather data for city: {city}")
@@ -137,14 +157,15 @@ def get_weather_data(city, month):
     min_temps = data["daily"]["temperature_2m_min"]
     max_temps = data["daily"]["temperature_2m_max"]
 
-    min_temps_month = [
-        temp for date, temp in zip(dates, min_temps)
-        if int(date.split("-")[1]) == month
-    ]
-    max_temps_month = [
-        temp for date, temp in zip(dates, max_temps)
-        if int(date.split("-")[1]) == month
-    ]
+    min_temps_month = []
+    for date, temp in zip(dates, min_temps):
+        if int(date.split("-")[1]) == month:
+            min_temps_month.append(temp)
+    
+    max_temps_month = []
+    for date, temp in zip(dates, max_temps):
+        if int(date.split("-")[1]) == month:
+            max_temps_month.append(temp)
 
     if not min_temps_month or not max_temps_month:
         logging.warning(f"No data for city: {city}, month: {month}")
@@ -153,13 +174,23 @@ def get_weather_data(city, month):
     min_temp_avg = round(statistics.mean(min_temps_month), 2)
     max_temp_avg = round(statistics.mean(max_temps_month), 2)
 
-    weather_cache[cache_key] = (min_temp_avg, max_temp_avg)
+    insert_weather(city,min_temp_avg,max_temp_avg)
     logging.debug(
         f"Weather data for {city}, month {month}: "
         f"min_avg={min_temp_avg}, max_avg={max_temp_avg}"
     )
     return min_temp_avg, max_temp_avg
 
+def insert_weather(city, min_temp_avg, max_temp_avg):
+    try:
+        cache_collection.insert_one({
+        "cache_type": "weather",
+        "city": city,
+        "min_temp_avg": min_temp_avg,
+        "max_temp_avg": max_temp_avg
+        })
+    except Exception as e:
+        logging.exception(f"Error occured while inserting city and month weather - {str(e)}")
 
 @app.route("/weather/monthly-profile", methods=["GET"])
 def monthly_weather_profile():
