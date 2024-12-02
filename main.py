@@ -88,7 +88,7 @@ def track_metrics(route, elapsed_time, error_occurred):
 
 
 def get_lat_lon(city):
-    cache_temp = check_cache("geocode_cache",city)
+    cache_temp = check_cache("geocode",city)
     if cache_temp:
         logging.debug(f"Geocode cache hit for city: {city}")
         return (cache_temp["lat"], cache_temp["lan"])
@@ -127,7 +127,7 @@ def insert_geocode(city,lat,lon):
 
 
 def get_weather_data(city, month):
-    weather_cache_temp = check_cache("weather_cache",city, month)
+    weather_cache_temp = check_cache("weather",city, month)
     if weather_cache_temp:
         logging.debug(f"Weather cache hit for city and month: {city}-{month}")
         return (weather_cache_temp["min_temp_avg"], weather_cache_temp["max_temp_avg"])
