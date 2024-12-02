@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
+from asgiref.wsgi import WsgiToAsgi  # Import WsgiToAsgi
 
 from utils import WeatherAppException
 
@@ -16,6 +17,7 @@ from utils import WeatherAppException
 load_dotenv()
 
 app = Flask(__name__)
+asgi_app = WsgiToAsgi(app)
 
 # Create logs directory if it doesn't exist
 if not os.path.exists('logs'):
@@ -374,4 +376,4 @@ async def get_metrics():
 if __name__ == "__main__":
     logging.info("Starting Flask app with Uvicorn...")
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")
+    uvicorn.run(asgi_app, host="0.0.0.0", port=5000, log_level="info")
