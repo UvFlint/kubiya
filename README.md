@@ -240,3 +240,5 @@ Monitors and records API usage:
 - Hits and Errors: Counts successful and failed requests per endpoint.
 - Response Times: Tracks average, maximum, and minimum response times.
 Metrics help in understanding usage patterns and optimizing the application.
+
+

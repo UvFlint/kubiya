@@ -2,16 +2,14 @@ import os
 import logging
 import statistics
 import time
-import asyncio
-
 from bson import ObjectId
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
-from asgiref.wsgi import WsgiToAsgi  # Import WsgiToAsgi
-
+from asgiref.wsgi import WsgiToAsgi 
 from utils import WeatherAppException
+import uvicorn
 
 # Load environment variables
 load_dotenv()
@@ -116,7 +114,7 @@ async def get_lat_lon(city):
     logging.debug(f"Geocode data for city '{city}': lat={lat}, lon={lon}")
     return lat, lon
 
-
+# geocode cache insert
 async def insert_geocode(city, lat, lon):
     try:
         await cache_collection.insert_one({
@@ -185,6 +183,7 @@ async def get_weather_data(city, month):
     )
     return min_temp_avg, max_temp_avg
 
+# weather cache insert
 async def insert_weather(city, month, min_temp_avg, max_temp_avg):
     try:
         await cache_collection.insert_one({
@@ -375,5 +374,4 @@ async def get_metrics():
 
 if __name__ == "__main__":
     logging.info("Starting Flask app with Uvicorn...")
-    import uvicorn
     uvicorn.run(asgi_app, host="0.0.0.0", port=5000, log_level="info")
