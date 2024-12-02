@@ -98,7 +98,7 @@ async def get_lat_lon(city):
     logging.info(f"Fetching geocode data for city: {city}")
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}"
     async with httpx.AsyncClient() as client:
-        response = await client.get(url, verify=False)
+        response = await client.get(url)
 
     if response.status_code != 200:
         logging.error(f"Failed to fetch geocode data for city: {city}")
@@ -145,7 +145,7 @@ async def get_weather_data(city, month):
         f"&daily=temperature_2m_min,temperature_2m_max&timezone=UTC"
     )
     async with httpx.AsyncClient() as client:
-        response = await client.get(url, verify=False)
+        response = await client.get(url)
 
     if response.status_code != 200:
         logging.error(f"Failed to fetch weather data for city: {city}")
