@@ -2,12 +2,13 @@ import os
 import logging
 import statistics
 import time
+import asyncio
 
 from bson import ObjectId
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
-import requests
-from pymongo import MongoClient
+import httpx
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from utils import WeatherAppException
 
@@ -37,11 +38,10 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 DB_NAME = os.getenv('DB_NAME', 'kubiya')
 
 try:
-    client = MongoClient(MONGO_URI)
+    client = AsyncIOMotorClient(MONGO_URI)
     logging.info("Connected to MongoDB successfully.")
 except Exception as e:
     logging.info(f"Failed to connect to MongoDB: {str(e)}")
-    quit()
 
 db = client[DB_NAME]
 metrics_collection = db["metrics"]
@@ -51,19 +51,19 @@ cache_collection = db["cache"]
 START_DATE = "2018-01-01"
 END_DATE = "2023-12-31"
 
-def check_cache(cache_type,city,month=None):
+async def check_cache(cache_type, city, month=None):
     try:
         filter_query = {"cache_type": cache_type, "city": city}
         if month is not None:
             filter_query["month"] = month
-        result = cache_collection.find_one(filter_query)
+        result = await cache_collection.find_one(filter_query)
         if not result:
             return False
         return result
     except Exception as e:
         logging.exception(f"Couldn't get cache from mongodb - {str(e)}")
 
-def track_metrics(route, elapsed_time, error_occurred):
+async def track_metrics(route, elapsed_time, error_occurred):
     try:
         filter_query = {"_id": metrics_objectID}
         update_query = {
@@ -77,7 +77,7 @@ def track_metrics(route, elapsed_time, error_occurred):
             "$setOnInsert": {f"{route}.route_name": route}
         }
 
-        metrics_collection.update_one(
+        await metrics_collection.update_one(
             filter_query,
             update_query,
             upsert=True
@@ -87,15 +87,16 @@ def track_metrics(route, elapsed_time, error_occurred):
         logging.exception(f"Failed to track metrics for route {route}: {e}")
 
 
-def get_lat_lon(city):
-    cache_temp = check_cache("geocode",city)
+async def get_lat_lon(city):
+    cache_temp = await check_cache("geocode", city)
     if cache_temp:
         logging.debug(f"Geocode cache hit for city: {city}")
         return (cache_temp["lat"], cache_temp["lon"])
 
     logging.info(f"Fetching geocode data for city: {city}")
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}"
-    response = requests.get(url,verify=False)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, verify=False)
 
     if response.status_code != 200:
         logging.error(f"Failed to fetch geocode data for city: {city}")
@@ -109,30 +110,30 @@ def get_lat_lon(city):
 
     lat = data["results"][0]["latitude"]
     lon = data["results"][0]["longitude"]
-    insert_geocode(city,lat,lon)
+    await insert_geocode(city, lat, lon)
     logging.debug(f"Geocode data for city '{city}': lat={lat}, lon={lon}")
     return lat, lon
 
 
-def insert_geocode(city,lat,lon):
+async def insert_geocode(city, lat, lon):
     try:
-        cache_collection.insert_one({
-        "cache_type": "geocode",
-        "city": city,
-        "lat": lat,
-        "lon": lon
+        await cache_collection.insert_one({
+            "cache_type": "geocode",
+            "city": city,
+            "lat": lat,
+            "lon": lon
         })
     except Exception as e:
-        logging.exception(f"Error occured while inserting city geocode - {str(e)}")
+        logging.exception(f"Error occurred while inserting city geocode - {str(e)}")
 
 
-def get_weather_data(city, month):
-    weather_cache_temp = check_cache("weather",city, month)
+async def get_weather_data(city, month):
+    weather_cache_temp = await check_cache("weather", city, month)
     if weather_cache_temp:
         logging.debug(f"Weather cache hit for city and month: {city}-{month}")
         return (weather_cache_temp["min_temp_avg"], weather_cache_temp["max_temp_avg"])
 
-    lat, lon = get_lat_lon(city)
+    lat, lon = await get_lat_lon(city)
     logging.info(f"Fetching weather data for city: {city}, month: {month}")
 
     url = (
@@ -141,7 +142,8 @@ def get_weather_data(city, month):
         f"&start_date={START_DATE}&end_date={END_DATE}"
         f"&daily=temperature_2m_min,temperature_2m_max&timezone=UTC"
     )
-    response = requests.get(url,verify=False)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, verify=False)
 
     if response.status_code != 200:
         logging.error(f"Failed to fetch weather data for city: {city}")
@@ -161,7 +163,7 @@ def get_weather_data(city, month):
     for date, temp in zip(dates, min_temps):
         if int(date.split("-")[1]) == month:
             min_temps_month.append(temp)
-    
+
     max_temps_month = []
     for date, temp in zip(dates, max_temps):
         if int(date.split("-")[1]) == month:
@@ -174,27 +176,27 @@ def get_weather_data(city, month):
     min_temp_avg = round(statistics.mean(min_temps_month), 2)
     max_temp_avg = round(statistics.mean(max_temps_month), 2)
 
-    insert_weather(city,month,min_temp_avg,max_temp_avg)
+    await insert_weather(city, month, min_temp_avg, max_temp_avg)
     logging.debug(
         f"Weather data for {city}, month {month}: "
         f"min_avg={min_temp_avg}, max_avg={max_temp_avg}"
     )
     return min_temp_avg, max_temp_avg
 
-def insert_weather(city,month, min_temp_avg, max_temp_avg):
+async def insert_weather(city, month, min_temp_avg, max_temp_avg):
     try:
-        cache_collection.insert_one({
-        "cache_type": "weather",
-        "city": city,
-        "month": month,
-        "min_temp_avg": min_temp_avg,
-        "max_temp_avg": max_temp_avg
+        await cache_collection.insert_one({
+            "cache_type": "weather",
+            "city": city,
+            "month": month,
+            "min_temp_avg": min_temp_avg,
+            "max_temp_avg": max_temp_avg
         })
     except Exception as e:
-        logging.exception(f"Error occured while inserting city and month weather - {str(e)}")
+        logging.exception(f"Error occurred while inserting city and month weather - {str(e)}")
 
 @app.route("/weather/monthly-profile", methods=["GET"])
-def monthly_weather_profile():
+async def monthly_weather_profile():
     route = "/weather/monthly-profile"
     start_time = time.perf_counter()
     error_occurred = False
@@ -213,7 +215,7 @@ def monthly_weather_profile():
             logging.error(f"Invalid month value: {month}")
             raise WeatherAppException("Invalid month. Month must be between 1 and 12.")
 
-        min_temp_avg, max_temp_avg = get_weather_data(city, month)
+        min_temp_avg, max_temp_avg = await get_weather_data(city, month)
         response = {
             "city": city,
             "month": month,
@@ -230,11 +232,11 @@ def monthly_weather_profile():
         return jsonify({"error": str(e)}), 400
     finally:
         elapsed_time = time.perf_counter() - start_time
-        track_metrics(route, elapsed_time, error_occurred)
+        await track_metrics(route, elapsed_time, error_occurred)
 
 
 @app.route("/travel/best-month", methods=["GET"])
-def best_travel_month():
+async def best_travel_month():
     route = "/travel/best-month"
     start_time = time.perf_counter()
     error_occurred = False
@@ -259,7 +261,7 @@ def best_travel_month():
 
         results = []
         for month in range(1, 13):
-            min_avg, max_avg = get_weather_data(city, month)
+            min_avg, max_avg = await get_weather_data(city, month)
             results.append((month, min_avg, max_avg))
 
         diffs = []
@@ -285,11 +287,11 @@ def best_travel_month():
         return jsonify({"error": str(e)}), 400
     finally:
         elapsed_time = time.perf_counter() - start_time
-        track_metrics(route, elapsed_time, error_occurred)
+        await track_metrics(route, elapsed_time, error_occurred)
 
 
 @app.route("/travel/compare-cities", methods=["GET"])
-def compare_cities():
+async def compare_cities():
     route = "/travel/compare-cities"
     start_time = time.perf_counter()
     error_occurred = False
@@ -315,7 +317,7 @@ def compare_cities():
         logging.info(f"Comparing cities: {city_list} for month: {month}")
         response = {"month": month}
         for city in city_list:
-            min_avg, max_avg = get_weather_data(city, month)
+            min_avg, max_avg = await get_weather_data(city, month)
             response[city] = {
                 "min_temp_avg": min_avg,
                 "max_temp_avg": max_avg,
@@ -330,33 +332,29 @@ def compare_cities():
         return jsonify({"error": str(e)}), 400
     finally:
         elapsed_time = time.perf_counter() - start_time
-        track_metrics(route, elapsed_time, error_occurred)
+        await track_metrics(route, elapsed_time, error_occurred)
 
 
 @app.route("/metrics", methods=["GET"])
-def get_metrics():
+async def get_metrics():
     response = {"routes": {}}
     try:
-        # Fetch all documents
         docs = metrics_collection.find()
 
-        for doc in docs:
+        async for doc in docs:
             for route, data in doc.items():
-                if route == "_id":  # Skip MongoDB's object ID
+                if route == "_id":
                     continue
 
-                # Extract route data
                 hits = data.get("hits", 0)
                 errors = data.get("errors", 0)
                 times = data.get("times", [])
 
-                # Aggregate times
                 total_time = sum(times)
                 min_time = min(times) if times else 0.0
                 max_time = max(times) if times else 0.0
                 avg_time = round(total_time / hits, 4) if hits > 0 else 0.0
 
-                # Prepare response
                 response["routes"][route] = {
                     "route_name": data.get("route_name", route),
                     "hits": hits,
@@ -374,5 +372,6 @@ def get_metrics():
 
 
 if __name__ == "__main__":
-    logging.info("Starting Flask app...")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    logging.info("Starting Flask app with Uvicorn...")
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")
