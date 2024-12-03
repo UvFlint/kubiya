@@ -2,7 +2,7 @@ import requests
 import random
 import time
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://13.60.52.33:5000" # or http://localhost:5000 to test locally
 
 CITIES = [
     'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',

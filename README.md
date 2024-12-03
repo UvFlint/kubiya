@@ -97,7 +97,7 @@ Retrieve the average minimum and maximum temperatures for a specific city and mo
 
 #### Example Request
 ```bash
-curl.exe -s "http://13.60.21.244:5000/weather/monthly-profile?city=London&month=7"
+curl.exe -s "http://13.60.52.33:5000/weather/monthly-profile?city=London&month=7"
 ```
 
 #### Example Response
@@ -122,7 +122,7 @@ Determine the best month to travel to a city based on preferred temperature rang
 
 #### Example Request
 ```bash
-curl.exe -s "http://13.60.21.244:5000/travel/best-month?city=Paris&min_temp=20&max_temp=30"
+curl.exe -s "http://13.60.52.33:5000/travel/best-month?city=Paris&min_temp=20&max_temp=30"
 ```
 
 
@@ -153,7 +153,7 @@ Compare weather data across multiple cities for a specific month.
 
 #### Example Request
 ```bash
-curl.exe -s "http://13.60.21.244:5000/travel/compare-cities?cities=New%20York,Los%20Angeles,Chicago&month=7"
+curl.exe -s "http://13.60.52.33:5000/travel/compare-cities?cities=New%20York,Los%20Angeles,Chicago&month=7"
 ```
 
 #### Example Response
@@ -184,7 +184,7 @@ Retrieve API usage metrics, including the number of hits, errors, and response t
 
 #### Request
 ```bash
-curl.exe -s "http://13.60.21.244:5000/metrics"
+curl.exe -s "http://13.60.52.33:5000/metrics"
 ```
 
 
@@ -258,3 +258,70 @@ Monitors and records API usage:
 Metrics help in understanding usage patterns and optimizing the application.
 
 
+## Tests
+test.py uses a list of cities and chooses randomly for the tests.
+for each route (excluding /metrics), test.py checks:
+- 5 valid responses
+- 3 Invalid responses
+
+
+List of cities:
+```bash
+CITIES = [
+    'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
+    'London', 'Paris', 'Tokyo', 'Sydney', 'Moscow', 'Berlin',
+    'Toronto', 'Beijing', 'Dubai', 'Sao Paulo'
+]
+```
+
+### output
+```bash
+Starting tests...
+
+Testing /weather/monthly-profile
+✔️  Test 1: Valid request: Passed
+✔️  Test 2: Valid request: Passed
+✔️  Test 3: Valid request: Passed
+✔️  Test 4: Valid request: Passed
+✔️  Test 5: Valid request: Passed
+
+Testing error handling for /weather/monthly-profile
+✔️  Error Test 1: Invalid parameters: Passed
+✔️  Error Test 2: Invalid parameters: Passed
+✔️  Error Test 3: Invalid parameters: Passed
+
+Testing /travel/best-month
+✔️  Test 1: Valid request: Passed
+✔️  Test 2: Valid request: Passed
+✔️  Test 3: Valid request: Passed
+✔️  Test 4: Valid request: Passed
+✔️  Test 5: Valid request: Passed
+
+Testing error handling for /travel/best-month 
+✔️  Error Test 1: Invalid parameters: Passed
+✔️  Error Test 2: Invalid parameters: Passed
+✔️  Error Test 3: Invalid parameters: Passed
+
+Testing /travel/compare-cities
+✔️  Test 1: Valid request: Passed
+✔️  Test 2: Valid request: Passed
+✔️  Test 3: Valid request: Passed
+✔️  Test 4: Valid request: Passed
+✔️  Test 5: Valid request: Passed
+
+Testing error handling for /travel/compare-cities
+✔️  Error Test 1: Invalid parameters: Passed
+✔️  Error Test 2: Invalid parameters: Passed
+✔️  Error Test 3: Invalid parameters: Passed
+
+Testing /metrics
+✔️  Test 1: Retrieve metrics: Passed
+
+Tests completed.
+
+Test Summary:
+Total Tests Run: 25
+Tests Passed: 25
+Tests Failed: 0
+Score: 100.00%
+```
