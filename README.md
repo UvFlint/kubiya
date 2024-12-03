@@ -258,9 +258,9 @@ Monitors and records API usage:
 Metrics help in understanding usage patterns and optimizing the application.
 
 
-## test.py
+## Tests
 test.py uses a list of cities and chooses randomly for the tests.
-for each route, test.py checks:
+for each route (excluding /metrics), test.py checks:
 - 5 valid responses
 - 3 Invalid responses
 
