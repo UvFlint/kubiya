@@ -258,7 +258,23 @@ Monitors and records API usage:
 Metrics help in understanding usage patterns and optimizing the application.
 
 
-## test.py print output
+## test.py
+test.py uses a list of cities and chooses randomly for the tests.
+for each route, test.py checks:
+- 5 valid responses
+- 3 Invalid responses
+
+
+List of cities:
+```bash
+CITIES = [
+    'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
+    'London', 'Paris', 'Tokyo', 'Sydney', 'Moscow', 'Berlin',
+    'Toronto', 'Beijing', 'Dubai', 'Sao Paulo'
+]
+```
+
+### output
 ```bash
 Starting tests...
 
