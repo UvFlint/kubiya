@@ -29,6 +29,11 @@ from kubiyaTelebotHandlers import (
     compare_cities_month,
     metrics
 )
+import os
+from dotenv import load_dotenv 
+
+load_dotenv()
+bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -36,7 +41,7 @@ logging.basicConfig(
 )
 
 def main():
-    application = ApplicationBuilder().token('YOUR_TELEGRAM_BOT_TOKEN').build()
+    application = ApplicationBuilder().token(bot_token).build()
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
