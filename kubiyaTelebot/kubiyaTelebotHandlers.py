@@ -35,6 +35,23 @@ def build_city_keyboard():
             row = []
     if row:
         keyboard.append(row)
+
+def build_city_keyboard_with_done(selected_cities):
+    keyboard = []
+    row = []
+    for index, city in enumerate(CITIES):
+        if city in selected_cities:
+            button_text = f"✓ {city}"
+        else:
+            button_text = city
+        row.append(InlineKeyboardButton(button_text, callback_data=city))
+        if (index + 1) % 3 == 0:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    done_button = InlineKeyboardButton('Done', callback_data='done')
+    keyboard.append([done_button])
     return InlineKeyboardMarkup(keyboard)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -63,7 +80,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def monthly_profile_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = build_city_keyboard()
-    await update.message.reply_text("Please select the city:", reply_markup=keyboard)
+    keyboard_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Please select the city:", reply_markup=keyboard_markup)
     return MP_CITY
 
 async def monthly_profile_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +105,8 @@ async def monthly_profile_month(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def best_travel_month_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = build_city_keyboard()
-    await update.message.reply_text("Please select the city:", reply_markup=keyboard)
+    keyboard_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Please select the city:", reply_markup=keyboard_markup)
     return BTM_CITY
 
 async def best_travel_month_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -117,22 +136,20 @@ async def best_travel_month_max_temp(update: Update, context: ContextTypes.DEFAU
     return ConversationHandler.END
 
 async def compare_cities_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = build_city_keyboard()
-    done_button = InlineKeyboardButton('Done', callback_data='done')
-    keyboard.inline_keyboard.append([done_button])
+    context.user_data['selected_cities'] = []
+    keyboard = build_city_keyboard_with_done(selected_cities=[])
     await update.message.reply_text(
         "Please select the cities (tap to select, 'Done' when finished):",
         reply_markup=keyboard
     )
-    context.user_data['selected_cities'] = []
     return CC_CITIES
 
 async def compare_cities_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
+    selected_cities = context.user_data.get('selected_cities', [])
     if data == 'done':
-        selected_cities = context.user_data.get('selected_cities', [])
         if not selected_cities:
             await query.edit_message_text("You have not selected any cities. Operation cancelled.")
             return ConversationHandler.END
@@ -141,35 +158,19 @@ async def compare_cities_city_selected(update: Update, context: ContextTypes.DEF
             await query.edit_message_text(f"You have selected: {cities_str}\nPlease enter the month (1-12):")
             return CC_MONTH
     else:
-        selected_cities = context.user_data.get('selected_cities', [])
-        if data not in selected_cities:
+        if data in selected_cities:
+            selected_cities.remove(data)
+        else:
             selected_cities.append(data)
         context.user_data['selected_cities'] = selected_cities
-        selected_cities_str = ', '.join(selected_cities)
+        keyboard = build_city_keyboard_with_done(selected_cities)
+        selected_cities_str = ', '.join(selected_cities) if selected_cities else 'None'
         await query.edit_message_text(
             f"Selected cities: {selected_cities_str}\n\n"
             "Please select more cities or press 'Done' when finished.",
-            reply_markup=build_city_keyboard_with_done(selected_cities)
+            reply_markup=keyboard
         )
         return CC_CITIES
-
-def build_city_keyboard_with_done(selected_cities):
-    keyboard = []
-    row = []
-    for index, city in enumerate(CITIES):
-        if city in selected_cities:
-            button_text = f"✓ {city}"
-        else:
-            button_text = city
-        row.append(InlineKeyboardButton(button_text, callback_data=city))
-        if (index + 1) % 3 == 0:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
-    done_button = InlineKeyboardButton('Done', callback_data='done')
-    keyboard.append([done_button])
-    return InlineKeyboardMarkup(keyboard)
 
 async def compare_cities_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
     month = update.message.text.strip()
