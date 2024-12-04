@@ -6,7 +6,7 @@ from kubiyaTelebotConstants import (
     BTM_CITY, BTM_MIN_TEMP, BTM_MAX_TEMP,
     CC_CITIES, CC_MONTH
 )
-from api import (
+from kubiyaTelebotAPI import (
     get_monthly_weather_profile,
     get_best_travel_month,
     compare_cities,
