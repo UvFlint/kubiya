@@ -1,6 +1,6 @@
 import httpx
 
-API_BASE_URL = "http://13.60.52.33"
+API_BASE_URL = "http://13.60.52.33:5000"
 
 async def get_monthly_weather_profile(city, month):
     url = f"{API_BASE_URL}/weather/monthly-profile"
