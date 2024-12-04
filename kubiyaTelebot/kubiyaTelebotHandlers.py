@@ -1,3 +1,4 @@
+# handlers.py
 
 import logging
 from telegram import (
@@ -6,7 +7,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup
 )
-from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
+from telegram.ext import ContextTypes, ConversationHandler
 from kubiyaTelebotConstants import (
     MP_CITY, MP_MONTH,
     BTM_CITY, BTM_MIN_TEMP, BTM_MAX_TEMP,
@@ -19,12 +20,14 @@ from kubiyaTelebotAPI import (
     get_metrics as api_get_metrics
 )
 
+# List of predefined cities
 CITIES = [
     'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
     'London', 'Paris', 'Tokyo', 'Sydney', 'Moscow', 'Berlin',
     'Toronto', 'Beijing', 'Dubai', 'Sao Paulo'
 ]
 
+# Function to build the city selection keyboard
 def build_city_keyboard():
     keyboard = []
     row = []
@@ -35,7 +38,9 @@ def build_city_keyboard():
             row = []
     if row:
         keyboard.append(row)
+    return keyboard  # Return the keyboard as a list of rows
 
+# Helper function to rebuild the keyboard, highlighting selected cities
 def build_city_keyboard_with_done(selected_cities):
     keyboard = []
     row = []
@@ -50,10 +55,12 @@ def build_city_keyboard_with_done(selected_cities):
             row = []
     if row:
         keyboard.append(row)
+    # Add 'Done' button
     done_button = InlineKeyboardButton('Done', callback_data='done')
     keyboard.append([done_button])
-    return InlineKeyboardMarkup(keyboard)
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+# Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Welcome to Kubiya Weather Bot! 🌦️\n\n"
@@ -64,6 +71,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Use /help to see this message again."
     )
 
+# Help command handler
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Available commands:\n"
@@ -74,13 +82,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/cancel - Cancel the current operation."
     )
 
+# Cancel command handler
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Operation cancelled.', reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
+# Handlers for /monthly_profile
 async def monthly_profile_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = build_city_keyboard()
-    keyboard_markup = InlineKeyboardMarkup(keyboard)
+    keyboard_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)  # Pass as keyword argument
     await update.message.reply_text("Please select the city:", reply_markup=keyboard_markup)
     return MP_CITY
 
@@ -103,9 +113,10 @@ async def monthly_profile_month(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"An error occurred: {e}")
     return ConversationHandler.END
 
+# Handlers for /best_travel_month
 async def best_travel_month_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = build_city_keyboard()
-    keyboard_markup = InlineKeyboardMarkup(keyboard)
+    keyboard_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)  # Pass as keyword argument
     await update.message.reply_text("Please select the city:", reply_markup=keyboard_markup)
     return BTM_CITY
 
@@ -135,12 +146,13 @@ async def best_travel_month_max_temp(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text(f"An error occurred: {e}")
     return ConversationHandler.END
 
+# Handlers for /compare_cities
 async def compare_cities_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['selected_cities'] = []
-    keyboard = build_city_keyboard_with_done(selected_cities=[])
+    keyboard_markup = build_city_keyboard_with_done(selected_cities=[])
     await update.message.reply_text(
         "Please select the cities (tap to select, 'Done' when finished):",
-        reply_markup=keyboard
+        reply_markup=keyboard_markup
     )
     return CC_CITIES
 
@@ -158,17 +170,19 @@ async def compare_cities_city_selected(update: Update, context: ContextTypes.DEF
             await query.edit_message_text(f"You have selected: {cities_str}\nPlease enter the month (1-12):")
             return CC_MONTH
     else:
+        # Toggle city selection
         if data in selected_cities:
             selected_cities.remove(data)
         else:
             selected_cities.append(data)
         context.user_data['selected_cities'] = selected_cities
-        keyboard = build_city_keyboard_with_done(selected_cities)
+        # Update the keyboard
+        keyboard_markup = build_city_keyboard_with_done(selected_cities)
         selected_cities_str = ', '.join(selected_cities) if selected_cities else 'None'
         await query.edit_message_text(
             f"Selected cities: {selected_cities_str}\n\n"
             "Please select more cities or press 'Done' when finished.",
-            reply_markup=keyboard
+            reply_markup=keyboard_markup
         )
         return CC_CITIES
 
@@ -184,6 +198,7 @@ async def compare_cities_month(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(f"An error occurred: {e}")
     return ConversationHandler.END
 
+# Handler for /metrics
 async def metrics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = await api_get_metrics()
