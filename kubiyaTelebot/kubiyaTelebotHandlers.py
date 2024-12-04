@@ -1,6 +1,12 @@
+
 import logging
-from telegram import Update, ReplyKeyboardRemove
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram import (
+    Update,
+    ReplyKeyboardRemove,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 from kubiyaTelebotConstants import (
     MP_CITY, MP_MONTH,
     BTM_CITY, BTM_MIN_TEMP, BTM_MAX_TEMP,
@@ -12,6 +18,24 @@ from kubiyaTelebotAPI import (
     compare_cities,
     get_metrics as api_get_metrics
 )
+
+CITIES = [
+    'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
+    'London', 'Paris', 'Tokyo', 'Sydney', 'Moscow', 'Berlin',
+    'Toronto', 'Beijing', 'Dubai', 'Sao Paulo'
+]
+
+def build_city_keyboard():
+    keyboard = []
+    row = []
+    for index, city in enumerate(CITIES):
+        row.append(InlineKeyboardButton(city, callback_data=city))
+        if (index + 1) % 3 == 0:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    return InlineKeyboardMarkup(keyboard)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -38,13 +62,16 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def monthly_profile_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Please enter the city:")
+    keyboard = build_city_keyboard()
+    await update.message.reply_text("Please select the city:", reply_markup=keyboard)
     return MP_CITY
 
-async def monthly_profile_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    city = update.message.text.strip()
+async def monthly_profile_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    city = query.data
     context.user_data['city'] = city
-    await update.message.reply_text("Please enter the month (1-12):")
+    await query.edit_message_text(f"You have selected: {city}\nPlease enter the month (1-12):")
     return MP_MONTH
 
 async def monthly_profile_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -59,13 +86,16 @@ async def monthly_profile_month(update: Update, context: ContextTypes.DEFAULT_TY
     return ConversationHandler.END
 
 async def best_travel_month_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Please enter the city:")
+    keyboard = build_city_keyboard()
+    await update.message.reply_text("Please select the city:", reply_markup=keyboard)
     return BTM_CITY
 
-async def best_travel_month_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    city = update.message.text.strip()
+async def best_travel_month_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    city = query.data
     context.user_data['city'] = city
-    await update.message.reply_text("Please enter the minimum temperature:")
+    await query.edit_message_text(f"You have selected: {city}\nPlease enter the minimum temperature:")
     return BTM_MIN_TEMP
 
 async def best_travel_month_min_temp(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,18 +117,64 @@ async def best_travel_month_max_temp(update: Update, context: ContextTypes.DEFAU
     return ConversationHandler.END
 
 async def compare_cities_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Please enter the cities (separated by commas):")
+    keyboard = build_city_keyboard()
+    done_button = InlineKeyboardButton('Done', callback_data='done')
+    keyboard.inline_keyboard.append([done_button])
+    await update.message.reply_text(
+        "Please select the cities (tap to select, 'Done' when finished):",
+        reply_markup=keyboard
+    )
+    context.user_data['selected_cities'] = []
     return CC_CITIES
 
-async def compare_cities_cities(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cities = update.message.text.strip()
-    context.user_data['cities'] = cities
-    await update.message.reply_text("Please enter the month (1-12):")
-    return CC_MONTH
+async def compare_cities_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    if data == 'done':
+        selected_cities = context.user_data.get('selected_cities', [])
+        if not selected_cities:
+            await query.edit_message_text("You have not selected any cities. Operation cancelled.")
+            return ConversationHandler.END
+        else:
+            cities_str = ', '.join(selected_cities)
+            await query.edit_message_text(f"You have selected: {cities_str}\nPlease enter the month (1-12):")
+            return CC_MONTH
+    else:
+        selected_cities = context.user_data.get('selected_cities', [])
+        if data not in selected_cities:
+            selected_cities.append(data)
+        context.user_data['selected_cities'] = selected_cities
+        selected_cities_str = ', '.join(selected_cities)
+        await query.edit_message_text(
+            f"Selected cities: {selected_cities_str}\n\n"
+            "Please select more cities or press 'Done' when finished.",
+            reply_markup=build_city_keyboard_with_done(selected_cities)
+        )
+        return CC_CITIES
+
+def build_city_keyboard_with_done(selected_cities):
+    keyboard = []
+    row = []
+    for index, city in enumerate(CITIES):
+        if city in selected_cities:
+            button_text = f"✓ {city}"
+        else:
+            button_text = city
+        row.append(InlineKeyboardButton(button_text, callback_data=city))
+        if (index + 1) % 3 == 0:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    done_button = InlineKeyboardButton('Done', callback_data='done')
+    keyboard.append([done_button])
+    return InlineKeyboardMarkup(keyboard)
 
 async def compare_cities_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
     month = update.message.text.strip()
-    cities = context.user_data['cities']
+    selected_cities = context.user_data.get('selected_cities', [])
+    cities = ','.join(selected_cities)
     try:
         data = await compare_cities(cities, month)
         formatted_data = f"Comparison of cities {cities} in month {month}:\n{data}"
